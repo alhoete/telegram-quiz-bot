@@ -1,58 +1,77 @@
-import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-import os
 
-# تفعيل اللوق (اختياري)
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+# حط هنا توكن البوت
+TOKEN = "8244193609:AAElb8nuUA0WbfAdLrxKy1kbb8_oSC8p3Bo"
 
-# جلب التوكن من Environment Variable
-TOKEN = os.environ.get("TELEGRAM_TOKEN")
-if not TOKEN:
-    raise ValueError("تأكد أنك وضعت TELEGRAM_TOKEN في Environment Variables!")
-
-# قائمة أسئلة بسيطة كمثال
-questions = [
-    {"q": "أصل كلمة 'أردن' يعني:", "options": ["الأرض الخصبة", "القوة والانحدار", "الأرض المستوية", "الضفة المرتفعة"], "answer": 1},
-    {"q": "أُعلن استقلال الأردن سنة:", "options": ["1946", "1952", "1939", "1960"], "answer": 0}
+# بنك الأسئلة (مثال مبسط من الأسئلة اللي عطيتني)
+QUESTIONS = [
+    {
+        "question": "أصل كلمة 'أردن' في اللغة الآرامية تعني:",
+        "options": ["أ) الأرض الخصبة", "ب) القوة والانحدار", "ج) الأرض المستوية", "د) الضفة المرتفعة"],
+        "answer": "ب"
+    },
+    {
+        "question": "أطلقت تسمية الأردن قبل الميلاد على المنطقة المحاذية لـ:",
+        "options": ["أ) نهر الفرات", "ب) نهر الأردن", "ج) نهر الزرقاء", "د) البحر الميت"],
+        "answer": "ب"
+    },
+    {
+        "question": "بعد الفتح الإسلامي أصبحت المنطقة الشرقية والغربية للنهر تُعرف باسم:",
+        "options": ["أ) جند دمشق", "ب) جند الأردن", "ج) جند فلسطين", "د) جند حوران"],
+        "answer": "ب"
+    },
+    # تقدر تضيف باقي الأسئلة بنفس التنسيق
 ]
 
-# دالة البداية
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("ابدأ الاختبار", callback_data='start_quiz')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("مرحبا! اضغط للبدء:", reply_markup=reply_markup)
+# القيم اللي بتتخزن لكل مستخدم
+user_data = {}
 
-# التعامل مع الأزرار
+# دالة بدء البوت
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_data[user_id] = {"score": 0, "index": 0}
+    await send_question(update, context, user_id)
+
+# دالة إرسال سؤال
+async def send_question(update, context, user_id):
+    index = user_data[user_id]["index"]
+    if index >= len(QUESTIONS):
+        score = user_data[user_id]["score"]
+        await update.message.reply_text(f"انتهى الاختبار! نتيجتك: {score}/{len(QUESTIONS)}")
+        return
+
+    q = QUESTIONS[index]
+    buttons = [
+        [InlineKeyboardButton(opt, callback_data=opt[-1])] for opt in q["options"]
+    ]
+    keyboard = InlineKeyboardMarkup(buttons)
+    await update.message.reply_text(q["question"], reply_markup=keyboard)
+
+# دالة الرد على اختيار المستخدم
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
-    if query.data == "start_quiz":
-        question = questions[0]
-        keyboard = [
-            [InlineKeyboardButton(opt, callback_data=str(i))] for i, opt in enumerate(question['options'])
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(text=question['q'], reply_markup=reply_markup)
-    else:
-        await query.edit_message_text(text=f"لقد اخترت الخيار {query.data}. شكرًا لك!")
+    user_id = query.from_user.id
+    data = query.data
 
-# الدالة الرئيسية لتشغيل البوت
+    index = user_data[user_id]["index"]
+    correct_answer = QUESTIONS[index]["answer"]
+
+    if data == correct_answer:
+        user_data[user_id]["score"] += 1
+
+    user_data[user_id]["index"] += 1
+    await send_question(query, context, user_id)
+
+# تشغيل البوت
 def main():
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button))
 
-    print("البوت شغال...")
     app.run_polling()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
